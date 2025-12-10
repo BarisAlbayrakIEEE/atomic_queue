@@ -144,6 +144,29 @@ ATOMIC_QUEUE_INLINE static void copy_relaxed(std::atomic<T>& a, std::atomic<T> c
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+template <bool MINIMIZE_CONTENTION = true, unsigned SIZE>
+class RingIndex{
+    static_assert(SIZE > 0, "SIZE must be greater than 0.");
+    static constexpr unsigned SIZE_MASK = SIZE - 1;
+    ATOMIC_QUEUE_INLINE static unsigned get(unsigned index) noexcept {
+        return index & SIZE_MASK;
+    }
+};
+
+template <unsigned SIZE>
+class RingIndex<false, SIZE>{
+    static_assert(SIZE > 0, "SIZE must be greater than 0.");
+    ATOMIC_QUEUE_INLINE static unsigned get(unsigned index) noexcept {
+#if __cplusplus >= 201703L
+        if constexpr ((SIZE & (SIZE - 1)) == 0)
+            return index & (SIZE - 1);
+#endif
+        return index % SIZE;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 } // namespace details
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -373,12 +396,16 @@ class AtomicQueue : public AtomicQueueCommon<AtomicQueue<T, SIZE, NIL, MINIMIZE_
     alignas(CACHE_LINE_SIZE) std::atomic<T> elements_[size_];
 
     ATOMIC_QUEUE_INLINE T do_pop(unsigned tail) noexcept {
-        std::atomic<T>& q_element = details::map<SHUFFLE_BITS>(elements_, tail % size_);
+        std::atomic<T>& q_element = details::map<SHUFFLE_BITS>(
+            elements_,
+            details::RingIndex<MINIMIZE_CONTENTION, size_>::get(tail));
         return Base::template do_pop_atomic<T, NIL>(q_element);
     }
 
     ATOMIC_QUEUE_INLINE void do_push(T element, unsigned head) noexcept {
-        std::atomic<T>& q_element = details::map<SHUFFLE_BITS>(elements_, head % size_);
+        std::atomic<T>& q_element = details::map<SHUFFLE_BITS>(
+            elements_,
+            details::RingIndex<MINIMIZE_CONTENTION, size_>::get(head));
         Base::template do_push_atomic<T, NIL>(element, q_element);
     }
 
@@ -413,13 +440,15 @@ class AtomicQueue2 : public AtomicQueueCommon<AtomicQueue2<T, SIZE, MINIMIZE_CON
     alignas(CACHE_LINE_SIZE) T elements_[size_] = {};
 
     ATOMIC_QUEUE_INLINE T do_pop(unsigned tail) noexcept {
-        unsigned index = details::remap_index<SHUFFLE_BITS>(tail % size_);
+        unsigned index = details::remap_index<SHUFFLE_BITS>(
+            details::RingIndex<MINIMIZE_CONTENTION, size_>::get(tail));
         return Base::do_pop_any(states_[index], elements_[index]);
     }
 
     template<class U>
     ATOMIC_QUEUE_INLINE void do_push(U&& element, unsigned head) noexcept {
-        unsigned index = details::remap_index<SHUFFLE_BITS>(head % size_);
+        unsigned index = details::remap_index<SHUFFLE_BITS>(
+            details::RingIndex<MINIMIZE_CONTENTION, size_>::get(head));
         Base::do_push_any(std::forward<U>(element), states_[index], elements_[index]);
     }
 

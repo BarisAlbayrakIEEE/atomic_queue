@@ -104,11 +104,22 @@ The benchmark also requires Intel TBB library to be available. It assumes that i
 
 These containers have corresponding `AtomicQueueB`, `OptimistAtomicQueueB`, `AtomicQueueB2`, `OptimistAtomicQueueB2` versions where the buffer size is specified as an argument to the constructor.
 
+The queues for the atomic types (AtomicQueue and AtomicQueueB) uses
+
 Totally ordered mode is supported. In this mode consumers receive messages in the same FIFO order the messages were posted. This mode is supported for `push` and `pop` functions, but for not the `try_` versions. On Intel x86 the totally ordered mode has 0 cost, as of 2019.
 
 Single-producer-single-consumer mode is supported. In this mode, no expensive atomic read-modify-write CPU instructions are necessary, only the cheapest atomic loads and stores. That improves queue throughput significantly.
 
 Move-only queue element types are fully supported. For example, a queue of `std::unique_ptr<T>` elements would be `AtomicQueue2B<std::unique_ptr<T>>` or `AtomicQueue2<std::unique_ptr<T>, CAPACITY>`.
+
+### Sentinel value (`T{}`) requirement
+The queues for the atomic types (`AtomicQueue` and `AtomicQueueB`) internally use the default-constructed `T{}` as a sentinel representing an empty slot in the ring buffer. Therefore, while working with these queues **`T{}` must never be pushed by user code.**
+
+In case `T{}` is required as a valid payload, one should use:
+- `AtomicQueue2<T, SIZE>`
+- `AtomicQueueB2<T, Alloc>`
+
+These variants store state separately and avoid the sentinel limitation.
 
 ## Queue schematics
 

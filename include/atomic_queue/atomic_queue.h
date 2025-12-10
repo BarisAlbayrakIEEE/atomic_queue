@@ -277,13 +277,13 @@ public:
     ATOMIC_QUEUE_INLINE bool try_push(T&& element) noexcept {
         auto head = head_.load(X);
         if(Derived::spsc_) {
-            if(static_cast<int>(head - tail_.load(X)) >= static_cast<int>(static_cast<Derived&>(*this).size_))
+            if(ATOMIC_QUEUE_UNLIKELY(static_cast<int>(head - tail_.load(X)) >= static_cast<int>(static_cast<Derived&>(*this).size_)))
                 return false;
             head_.store(head + 1, X);
         }
         else {
             do {
-                if(static_cast<int>(head - tail_.load(X)) >= static_cast<int>(static_cast<Derived&>(*this).size_))
+                if(ATOMIC_QUEUE_UNLIKELY(static_cast<int>(head - tail_.load(X)) >= static_cast<int>(static_cast<Derived&>(*this).size_)))
                     return false;
             } while(ATOMIC_QUEUE_UNLIKELY(!head_.compare_exchange_weak(head, head + 1, X, X))); // This loop is not FIFO.
         }
@@ -296,13 +296,13 @@ public:
     ATOMIC_QUEUE_INLINE bool try_pop(T& element) noexcept {
         auto tail = tail_.load(X);
         if(Derived::spsc_) {
-            if(static_cast<int>(head_.load(X) - tail) <= 0)
+            if(ATOMIC_QUEUE_UNLIKELY(static_cast<int>(head_.load(X) - tail) <= 0))
                 return false;
             tail_.store(tail + 1, X);
         }
         else {
             do {
-                if(static_cast<int>(head_.load(X) - tail) <= 0)
+                if(ATOMIC_QUEUE_UNLIKELY(static_cast<int>(head_.load(X) - tail) <= 0))
                     return false;
             } while(ATOMIC_QUEUE_UNLIKELY(!tail_.compare_exchange_weak(tail, tail + 1, X, X))); // This loop is not FIFO.
         }
